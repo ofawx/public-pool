@@ -403,6 +403,7 @@ export class StratumV1Client {
 
         const job = new MiningJob(
             network,
+            this.configService.get('COINBASE_TAG') ?? '\\public-pool\\',
             this.stratumV1JobsService.getNextId(),
             payoutInformation,
             jobTemplate

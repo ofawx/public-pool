@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { AddressType, getAddressInfo } from 'bitcoin-address-validation';
 import * as bitcoinjs from 'bitcoinjs-lib';
 
@@ -22,6 +23,7 @@ export class MiningJob {
 
     constructor(
         private network: bitcoinjs.networks.Network,
+        private readonly tag: string,
         public jobId: string,
         payoutInformation: AddressObject[],
         jobTemplate: IJobTemplate
@@ -39,7 +41,7 @@ export class MiningJob {
         //    32-byte - Commitment hash: Double-SHA256(witness root hash|witness reserved value)
 
         //    39th byte onwards: Optional data with no consensus meaning
-        const extra = Buffer.from('Public-Pool');
+        const extra = Buffer.from(tag);
 
         // Encode the block height
         // https://github.com/bitcoin/bips/blob/master/bip-0034.mediawiki
