@@ -20,7 +20,7 @@ import { eRequestMethod } from './enums/eRequestMethod';
 import { eResponseMethod } from './enums/eResponseMethod';
 import { eStratumErrorCode } from './enums/eStratumErrorCode';
 import { MiningJob } from './MiningJob';
-import { AuthorizationMessage } from './stratum-messages/AuthorizationMessage';
+import { AggregateAuthorizationMessage, SoloAuthorizationMessage } from './stratum-messages/AuthorizationMessage';
 import { ConfigurationMessage } from './stratum-messages/ConfigurationMessage';
 import { MiningSubmitMessage } from './stratum-messages/MiningSubmitMessage';
 import { StratumErrorMessage } from './stratum-messages/StratumErrorMessage';
@@ -33,7 +33,7 @@ export class StratumV1Client {
 
     private clientSubscription: SubscriptionMessage;
     private clientConfiguration: ConfigurationMessage;
-    private clientAuthorization: AuthorizationMessage;
+    private clientAuthorization: AggregateAuthorizationMessage | SoloAuthorizationMessage;
     private clientSuggestedDifficulty: SuggestDifficulty;
     private stratumSubscription: Subscription;
     private backgroundWork: NodeJS.Timer[] = [];
@@ -48,8 +48,10 @@ export class StratumV1Client {
 
     public extraNonceAndSessionId: string;
     public sessionStart: Date;
-    public noFee: boolean;
     public hashRate: number;
+    
+    public aggregate: boolean;
+    public aggregatePayoutInformation: Array< { address: string, percent: number } >;
 
 
     constructor(
@@ -78,6 +80,14 @@ export class StratumV1Client {
                 })
         });
 
+        const aggregateAddress = this.configService.get('AGGREGATE_ADDRESS');
+        this.aggregate = (aggregateAddress != null && aggregateAddress.length > 0)
+        if (this.aggregate) {
+            this.aggregatePayoutInformation = [
+                { address: aggregateAddress, percent: 100 }
+            ];
+        }
+
 
     }
 
@@ -105,7 +115,7 @@ export class StratumV1Client {
 
 
     private async handleMessage(message: string) {
-        //console.log(`Received from ${this.extraNonceAndSessionId}`, message);
+        // console.log(`Received from ${this.extraNonceAndSessionId}`, message);
 
         // Parse the message and check if it's the initial subscription message
         let parsedMessage = null;
@@ -204,10 +214,9 @@ export class StratumV1Client {
             case eRequestMethod.AUTHORIZE: {
 
                 const authorizationMessage = plainToInstance(
-                    AuthorizationMessage,
+                    this.aggregate ? AggregateAuthorizationMessage : SoloAuthorizationMessage,
                     parsedMessage,
                 );
-
                 const validatorOptions: ValidatorOptions = {
                     whitelist: true,
                     forbidNonWhitelisted: true,
@@ -378,30 +387,10 @@ export class StratumV1Client {
     }
 
     private async sendNewMiningJob(jobTemplate: IJobTemplate) {
-
-        let payoutInformation;
-        const devFeeAddress = this.configService.get('DEV_FEE_ADDRESS');
-        //50Th/s
-        this.noFee = false;
-        if (this.entity) {
-            this.hashRate = await this.clientStatisticsService.getHashRateForSession(this.clientAuthorization.address, this.clientAuthorization.worker, this.extraNonceAndSessionId);
-            this.noFee = this.hashRate != 0 && this.hashRate < 50000000000000;
-        }
-        if (this.noFee || devFeeAddress == null || devFeeAddress.length < 1) {
-            payoutInformation = [
-                { address: this.clientAuthorization.address, percent: 100 }
-            ];
-
-        } else {
-            payoutInformation = [
-                { address: devFeeAddress, percent: 1.5 },
-                { address: this.clientAuthorization.address, percent: 98.5 }
-            ];
-        }
-
+        let payoutInformation = await this.getPayoutInformation();
+        console.log(payoutInformation)
         const networkConfig = this.configService.get('NETWORK');
         let network;
-
         if (networkConfig === 'mainnet') {
             network = bitcoinjs.networks.bitcoin;
         } else if (networkConfig === 'testnet') {
@@ -432,6 +421,30 @@ export class StratumV1Client {
 
     }
 
+    private async getPayoutInformation(): Promise<Array<{address: string, percent: number}>> {
+        // If in aggregation mode, use static payout information
+        if (this.aggregate) {
+            return this.aggregatePayoutInformation;
+        }
+
+        // If fee charged, check fee conditions met and apply
+        const devFeeAddress = this.configService.get('DEV_FEE_ADDRESS');
+        if (this.entity && (devFeeAddress != null && devFeeAddress.length > 0)) {
+            this.hashRate = await this.clientStatisticsService.getHashRateForSession(this.clientAuthorization.address, this.clientAuthorization.worker, this.extraNonceAndSessionId);
+            if (this.hashRate != 0 && this.hashRate >= 50000000000000) {
+                return [
+                    { address: devFeeAddress, percent: 1.5 },
+                    { address: this.clientAuthorization.address, percent: 98.5 }
+                ];
+            }
+        }
+
+        // No fee default case
+        return [
+            { address: this.clientAuthorization.address, percent: 100 }
+        ];
+
+    }
 
     private async handleMiningSubmission(submission: MiningSubmitMessage) {
 

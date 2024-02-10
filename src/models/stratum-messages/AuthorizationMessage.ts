@@ -1,5 +1,5 @@
 import { Expose, Transform } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Allow, ArrayMaxSize, ArrayMinSize, IsArray, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
 
 import { eRequestMethod } from '../enums/eRequestMethod';
 import { IsBitcoinAddress } from '../validators/bitcoin-address.validator';
@@ -11,14 +11,6 @@ export class AuthorizationMessage extends StratumBaseMessage {
     @ArrayMinSize(2)
     @ArrayMaxSize(2)
     params: string[];
-
-    @Expose()
-    @IsString()
-    @Transform(({ value, key, obj, type }) => {
-        return obj.params[0].split('.')[0];
-    })
-    @IsBitcoinAddress()
-    public address: string;
 
     @Expose()
     @IsString()
@@ -52,4 +44,23 @@ export class AuthorizationMessage extends StratumBaseMessage {
             result: true
         };
     }
+}
+
+export class SoloAuthorizationMessage extends AuthorizationMessage {
+    @Expose()
+    @IsString()
+    @Transform(({ value, key, obj, type }) => {
+        return obj.params[0].split('.')[0];
+    })
+    @IsBitcoinAddress()
+    public address: string;
+}
+
+export class AggregateAuthorizationMessage extends AuthorizationMessage {
+    @Expose()
+    @IsString()
+    @Transform(({ value, key, obj, type }) => {
+        return obj.params[0].split('.')[0];
+    })
+    public address: string;
 }
