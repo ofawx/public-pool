@@ -422,6 +422,9 @@ export class StratumV1Client {
     }
 
     private async getPayoutInformation(): Promise<Array<{address: string, percent: number}>> {
+        // Update hashrate
+        this.hashRate = await this.clientStatisticsService.getHashRateForSession(this.clientAuthorization.address, this.clientAuthorization.worker, this.extraNonceAndSessionId);
+        
         // If in aggregation mode, use static payout information
         if (this.aggregate) {
             return this.aggregatePayoutInformation;
@@ -430,7 +433,6 @@ export class StratumV1Client {
         // If fee charged, check fee conditions met and apply
         const devFeeAddress = this.configService.get('DEV_FEE_ADDRESS');
         if (this.entity && (devFeeAddress != null && devFeeAddress.length > 0)) {
-            this.hashRate = await this.clientStatisticsService.getHashRateForSession(this.clientAuthorization.address, this.clientAuthorization.worker, this.extraNonceAndSessionId);
             if (this.hashRate != 0 && this.hashRate >= 50000000000000) {
                 return [
                     { address: devFeeAddress, percent: 1.5 },
