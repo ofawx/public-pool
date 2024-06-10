@@ -388,7 +388,7 @@ export class StratumV1Client {
 
     private async sendNewMiningJob(jobTemplate: IJobTemplate) {
         let payoutInformation = await this.getPayoutInformation();
-        console.log(payoutInformation)
+        // console.log(payoutInformation)
         const networkConfig = this.configService.get('NETWORK');
         let network;
         if (networkConfig === 'mainnet') {
