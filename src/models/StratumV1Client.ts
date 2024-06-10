@@ -77,6 +77,7 @@ export class StratumV1Client {
                 console.error(e);
             }
         })
+        rl.on('error', async (error: Error) => { });
 
 
     }
