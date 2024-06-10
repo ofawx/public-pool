@@ -79,6 +79,7 @@ export class StratumV1Client {
                 console.error(e);
             }
         })
+        rl.on('error', async (error: Error) => { });
 
         const aggregateAddress = this.configService.get('AGGREGATE_ADDRESS');
         this.aggregate = (aggregateAddress != null && aggregateAddress.length > 0)
