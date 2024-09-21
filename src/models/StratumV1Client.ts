@@ -49,11 +49,12 @@ export class StratumV1Client {
 
     public extraNonceAndSessionId: string;
     public sessionStart: Date;
-    public hashRate: number;
+    public hashRate: number = 0;
     
     public aggregate: boolean;
     public aggregatePayoutInformation: Array< { address: string, percent: number } >;
 
+    private buffer: string = '';
 
     constructor(
         public readonly socket: Socket,
@@ -67,19 +68,22 @@ export class StratumV1Client {
         private readonly addressSettingsService: AddressSettingsService
     ) {
 
-        const rl = createInterface({
-            input: this.socket
-        })
+        this.socket.on('data', (data: Buffer) => {
+            this.buffer += data.toString();
+            let lines = this.buffer.split('\n');
+            this.buffer = lines.pop() || ''; // Save the last part of the data (incomplete line) to the buffer
 
-        rl.on("line", async (line) => {
-            try {
-                await this.handleMessage(line);
-            } catch (e) {
-                await this.socket.end();
-                console.error(e);
-            }
-        })
-        rl.on('error', async (error: Error) => { });
+            lines
+                .filter(m => m.length > 0)
+                .forEach(async (m) => {
+                    try {
+                        await this.handleMessage(m);
+                    } catch (e) {
+                        await this.socket.end();
+                        console.error(e);
+                    }
+                });
+        });
 
         const aggregateAddress = this.configService.get('AGGREGATE_ADDRESS');
         this.aggregate = (aggregateAddress != null && aggregateAddress.length > 0)
@@ -320,7 +324,7 @@ export class StratumV1Client {
 
 
                 } else {
-                    console.error('Mining Submit validation error');
+                    console.log('Mining Submit validation error');
                     const err = new StratumErrorMessage(
                         miningSubmitMessage.id,
                         eStratumErrorCode.OtherUnknown,
@@ -403,6 +407,7 @@ export class StratumV1Client {
         }
 
         const job = new MiningJob(
+            this.configService,
             network,
             this.configService.get('COINBASE_TAG') ?? 'Public-Pool',
             this.stratumV1JobsService.getNextId(),
@@ -599,9 +604,9 @@ export class StratumV1Client {
 
             await this.socket.write(data);
 
-
-            // we need to clear the jobs so that the difficulty set takes effect. Otherwise the different miner implementations can cause issues
             const jobTemplate = await firstValueFrom(this.stratumV1JobsService.newMiningJob$);
+            // we need to clear the jobs so that the difficulty set takes effect. Otherwise the different miner implementations can cause issues
+            jobTemplate.blockData.clearJobs = true;
             await this.sendNewMiningJob(jobTemplate);
 
         }
