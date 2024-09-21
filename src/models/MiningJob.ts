@@ -1,4 +1,3 @@
-import { ConfigService } from '@nestjs/config';
 import { AddressType, getAddressInfo } from 'bitcoin-address-validation';
 import * as bitcoinjs from 'bitcoinjs-lib';
 
@@ -26,7 +25,6 @@ export class MiningJob {
     constructor(
         configService: ConfigService,
         private network: bitcoinjs.networks.Network,
-        private readonly tag: string,
         public jobId: string,
         payoutInformation: AddressObject[],
         jobTemplate: IJobTemplate
